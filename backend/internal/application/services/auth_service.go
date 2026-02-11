@@ -1,0 +1,85 @@
+package services
+
+import (
+	"context"
+	"errors"
+	"os"
+	"time"
+
+	"github.com/sohamify/rms-backend/internal/domain/entities"
+	"github.com/sohamify/rms-backend/internal/domain/repositories"
+
+	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
+)
+
+var (
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserInactive       = errors.New("user is inactive")
+)
+
+type AuthService interface {
+	Login(ctx context.Context, email, password string) (*entities.UserDTO, string, error)
+}
+
+type authService struct {
+	userRepo repositories.UserRepository
+	roleRepo repositories.RoleRepository
+	logger   *zap.Logger
+}
+
+func NewAuthService(userRepo repositories.UserRepository, roleRepo repositories.RoleRepository, logger *zap.Logger) AuthService {
+	return &authService{userRepo, roleRepo, logger}
+}
+
+func (s *authService) Login(ctx context.Context, email, password string) (*entities.UserDTO, string, error) {
+	user, err := s.userRepo.FindByEmail(ctx, email)
+	if err != nil {
+		s.logger.Error("Failed to find user", zap.String("email", email), zap.Error(err))
+		return nil, "", ErrInvalidCredentials
+	}
+	if user == nil {
+		return nil, "", ErrInvalidCredentials
+	}
+
+	if !user.IsActive {
+		return nil, "", ErrUserInactive
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		s.logger.Warn("Invalid password attempt", zap.String("email", email))
+		return nil, "", ErrInvalidCredentials
+	}
+
+	// Fetch role for claims
+	role, err := s.roleRepo.FindByID(ctx, user.RoleID)
+	if err != nil || role == nil {
+		s.logger.Error("Failed to find role", zap.String("role_id", user.RoleID.Hex()), zap.Error(err))
+		return nil, "", errors.New("role not found")
+	}
+
+	// Update last login
+	now := time.Now()
+	if err := s.userRepo.UpdateLastLogin(ctx, user.ID.Hex(), now); err != nil {
+		s.logger.Error("Failed to update last login", zap.String("user_id", user.ID.Hex()), zap.Error(err))
+		// Non-fatal, continue
+	}
+
+	// Generate JWT
+	claims := jwt.MapClaims{
+		"user_id":     user.ID.Hex(),
+		"role":        role.Name,
+		"permissions": role.Permissions,
+		"exp":         time.Now().Add(24 * time.Hour).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signedToken, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		s.logger.Error("Failed to sign JWT", zap.Error(err))
+		return nil, "", errors.New("internal error")
+	}
+
+	s.logger.Info("User logged in", zap.String("user_id", user.ID.Hex()))
+	return user.ToDTO(), signedToken, nil
+}
