@@ -1,0 +1,12 @@
+# Go
+*.exe
+*.dll
+vendor/
+
+# Node
+node_modules/
+.env
+
+# Misc
+*.log
+tmp/
