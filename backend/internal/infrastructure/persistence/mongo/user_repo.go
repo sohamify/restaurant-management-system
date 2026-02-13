@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type userRepo struct {
@@ -35,5 +36,61 @@ func (r *userRepo) UpdateLastLogin(ctx context.Context, id string, lastLogin tim
 	filter := bson.M{"_id": objID}
 	update := bson.M{"$set": bson.M{"last_login_at": lastLogin, "updated_at": time.Now()}}
 	_, err := r.coll.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *userRepo) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.User, error) {
+	var user entities.User
+	filter := bson.M{"_id": id, "deleted_at": nil}
+	err := r.coll.FindOne(ctx, filter).Decode(&user)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	return &user, err
+}
+
+func (r *userRepo) FindAll(ctx context.Context, filter bson.M, opts *options.FindOptions) ([]*entities.User, int64, error) {
+	filter["deleted_at"] = nil // exclude soft-deleted
+
+	cursor, err := r.coll.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []*entities.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, 0, err
+	}
+
+	count, err := r.coll.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return users, count, nil
+}
+
+func (r *userRepo) Create(ctx context.Context, user *entities.User) error {
+	user.CreatedAt = time.Now()
+	user.UpdatedAt = time.Now()
+	_, err := r.coll.InsertOne(ctx, user)
+	return err
+}
+
+func (r *userRepo) Update(ctx context.Context, id primitive.ObjectID, update bson.M) error {
+	update["$set"]["updated_at"] = time.Now()
+	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": id}, update)
+	return err
+}
+
+func (r *userRepo) SoftDelete(ctx context.Context, id primitive.ObjectID) error {
+	update := bson.M{
+		"$set": bson.M{
+			"deleted_at": time.Now(),
+			"updated_at": time.Now(),
+		},
+	}
+	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": id}, update)
 	return err
 }
