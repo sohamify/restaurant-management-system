@@ -32,7 +32,7 @@ type RoleService interface {
 
 type roleService struct {
 	roleRepo repositories.RoleRepository
-	userRepo repositories.UserRepository // ← injected
+	userRepo repositories.UserRepository // injected for delete checks
 	logger   *zap.Logger
 }
 
@@ -61,13 +61,20 @@ func (s *roleService) CreateRole(ctx context.Context, req *entities.CreateRoleRe
 		CreatedAt:   time.Now(),
 	}
 
-	if err := s.roleRepo.Create(ctx, role); err != nil {
-		s.logger.Error("Failed to create role", zap.Error(err))
-		return nil, err
+	// Create and get back the role with real ID
+	createErr := s.roleRepo.Create(ctx, role)
+	if createErr != nil {
+		s.logger.Error("Failed to create role", zap.Error(createErr))
+		return nil, createErr
 	}
+	createdRole := role
 
-	s.logger.Info("Role created", zap.String("name", role.Name))
-	return role.ToDTO(), nil
+	s.logger.Info("Role created",
+		zap.String("name", createdRole.Name),
+		zap.String("id", createdRole.ID.Hex()),
+	)
+
+	return createdRole.ToDTO(), nil
 }
 
 func (s *roleService) ListRoles(ctx context.Context, page, limit int, search string) ([]*entities.RoleDTO, int64, error) {
@@ -136,7 +143,7 @@ func (s *roleService) UpdateRole(ctx context.Context, id string, req *entities.U
 		updateFields["name"] = strings.ToUpper(*req.Name)
 	}
 
-	if req.Permissions != nil { // Changed to check nil instead of len > 0
+	if req.Permissions != nil { // Check for nil instead of len > 0
 		updateFields["permissions"] = req.Permissions
 	}
 
@@ -144,12 +151,17 @@ func (s *roleService) UpdateRole(ctx context.Context, id string, req *entities.U
 		return role.ToDTO(), nil // no changes
 	}
 
-	if err := s.roleRepo.Update(ctx, rid, updateFields); err != nil {
+	err = s.roleRepo.Update(ctx, rid, updateFields)
+	if err != nil {
 		s.logger.Error("Failed to update role", zap.String("id", id), zap.Error(err))
 		return nil, err
 	}
 
-	updatedRole, _ := s.roleRepo.FindByID(ctx, rid)
+	updatedRole, err := s.roleRepo.FindByID(ctx, rid)
+	if err != nil || updatedRole == nil {
+		return nil, ErrRoleNotFound
+	}
+
 	s.logger.Info("Role updated", zap.String("id", id))
 	return updatedRole.ToDTO(), nil
 }

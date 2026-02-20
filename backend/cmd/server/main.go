@@ -51,20 +51,22 @@ func main() {
 		logger.Fatal("Failed to create indexes", zap.Error(err))
 	}
 
-	// 4. Repositories (all core ones)
+	// 4. Repositories
 	userRepo := mongo.NewUserRepository()
 	roleRepo := mongo.NewRoleRepository()
-	// Add more repos here later (e.g. tableRepo, menuRepo, orderRepo...)
+	tableRepo := mongo.NewTableRepository()
 
 	// 5. Services
 	authService := services.NewAuthService(userRepo, roleRepo, logger)
 	userService := services.NewUserService(userRepo, roleRepo, logger)
-	roleService := services.NewRoleService(roleRepo, userRepo, logger) // note: userRepo injected for delete checks
+	roleService := services.NewRoleService(roleRepo, userRepo, logger)
+	tableService := services.NewTableService(tableRepo, logger)
 
 	// 6. Handlers
 	authHandler := deliveryHttp.NewAuthHandler(authService, logger)
 	userHandler := deliveryHttp.NewUserHandler(userService, logger)
 	roleHandler := deliveryHttp.NewRoleHandler(roleService, logger)
+	tableHandler := deliveryHttp.NewTableHandler(tableService, logger)
 
 	// 7. Gin router setup
 	gin.SetMode(gin.ReleaseMode) // change to gin.DebugMode during development
@@ -94,7 +96,7 @@ func main() {
 
 	// Users management (admin only)
 	users := protected.Group("/users")
-	users.Use(middleware.RequirePermission("USER_MANAGE", logger)) // or finer-grained perms
+	users.Use(middleware.RequirePermission("USER_MANAGE", logger))
 	users.POST("", userHandler.Create)
 	users.GET("", userHandler.List)
 	users.GET("/:id", userHandler.Get)
@@ -112,10 +114,24 @@ func main() {
 	roles.PATCH("/:id", roleHandler.Update)
 	roles.DELETE("/:id", roleHandler.Delete)
 
-	// Placeholder for future modules (expand later)
+	// Tables management (admin/manager only)
+	tables := protected.Group("/tables")
+	tables.Use(middleware.RequirePermission("TABLE_MANAGE", logger))
+	tables.POST("", tableHandler.Create)
+	tables.GET("", tableHandler.List)
+	tables.GET("/:id", tableHandler.Get)
+	tables.PATCH("/:id", tableHandler.Update)
+	tables.DELETE("/:id", tableHandler.Delete)
+
+	// Waiter-specific: only see assigned tables
+	waiterTables := protected.Group("/waiter/tables")
+	waiterTables.Use(middleware.RequirePermission("TABLE_READ_ASSIGNED", logger))
+	waiterTables.GET("", tableHandler.ListAssigned)
+
+	// Placeholder for orders (next feature)
 	protected.GET("/orders", middleware.RequirePermission("ORDER_VIEW", logger), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Orders endpoint – implementation coming soon",
+			"message": "Orders endpoint – coming soon",
 		})
 	})
 
@@ -125,7 +141,6 @@ func main() {
 		Handler: r,
 	}
 
-	// Start server in background
 	go func() {
 		logger.Info("HTTP server starting", zap.String("addr", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -133,7 +148,6 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal (Ctrl+C or SIGTERM)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

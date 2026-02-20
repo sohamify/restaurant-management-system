@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/sohamify/rms-backend/internal/domain/entities"
@@ -40,8 +41,19 @@ func (r *roleRepo) FindByName(ctx context.Context, name string) (*entities.Role,
 
 func (r *roleRepo) Create(ctx context.Context, role *entities.Role) error {
 	role.CreatedAt = time.Now()
-	_, err := r.coll.InsertOne(ctx, role)
-	return err
+
+	res, err := r.coll.InsertOne(ctx, role)
+	if err != nil {
+		return err
+	}
+
+	insertedID, ok := res.InsertedID.(primitive.ObjectID)
+	if !ok {
+		return errors.New("inserted ID is not ObjectID")
+	}
+
+	role.ID = insertedID
+	return nil
 }
 
 func (r *roleRepo) Update(ctx context.Context, id primitive.ObjectID, fields bson.M) error {
