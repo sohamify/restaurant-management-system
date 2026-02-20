@@ -65,7 +65,7 @@ type CreateUserRequest struct {
 	Email     string `json:"email"      binding:"required,email"`
 	Password  string `json:"password"   binding:"required,min=8"`
 	Phone     string `json:"phone"      binding:"omitempty"`
-	RoleID    string `json:"role_id"    binding:"required,objectid"` // hex string
+	RoleID    string `json:"role_id"    binding:"required"` // hex string
 }
 
 type UpdateUserRequest struct {

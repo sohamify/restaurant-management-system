@@ -29,3 +29,13 @@ func (r *Role) ToDTO() *RoleDTO {
 		CreatedAt:   r.CreatedAt,
 	}
 }
+
+type CreateRoleRequest struct {
+	Name        string   `json:"name" binding:"required,min=3,max=50"`
+	Permissions []string `json:"permissions" binding:"required,min=1"`
+}
+
+type UpdateRoleRequest struct {
+	Name        *string  `json:"name,omitempty"`
+	Permissions []string `json:"permissions,omitempty"` // full replace
+}

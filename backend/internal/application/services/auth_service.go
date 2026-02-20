@@ -6,12 +6,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/sohamify/rms-backend/internal/domain/entities"
-	"github.com/sohamify/rms-backend/internal/domain/repositories"
-
 	"github.com/golang-jwt/jwt/v5"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/sohamify/rms-backend/internal/domain/entities"
+	"github.com/sohamify/rms-backend/internal/domain/repositories"
 )
 
 var (
@@ -52,27 +53,35 @@ func (s *authService) Login(ctx context.Context, email, password string) (*entit
 		return nil, "", ErrInvalidCredentials
 	}
 
-	// Fetch role for claims
+	// Fetch role for claims (including permissions)
 	role, err := s.roleRepo.FindByID(ctx, user.RoleID)
 	if err != nil || role == nil {
 		s.logger.Error("Failed to find role", zap.String("role_id", user.RoleID.Hex()), zap.Error(err))
 		return nil, "", errors.New("role not found")
 	}
 
-	// Update last login
+	// Update last_login_at using the generic Update method
 	now := time.Now()
-	if err := s.userRepo.UpdateLastLogin(ctx, user.ID.Hex(), now); err != nil {
-		s.logger.Error("Failed to update last login", zap.String("user_id", user.ID.Hex()), zap.Error(err))
-		// Non-fatal, continue
+	updateFields := bson.M{
+		"last_login_at": now,
 	}
 
-	// Generate JWT
+	if err := s.userRepo.Update(ctx, user.ID, updateFields); err != nil {
+		s.logger.Error("Failed to update last login",
+			zap.String("user_id", user.ID.Hex()),
+			zap.Error(err),
+		)
+		// This is non-fatal — we continue with login anyway
+	}
+
+	// Generate JWT with permissions in claims (for RBAC middleware)
 	claims := jwt.MapClaims{
 		"user_id":     user.ID.Hex(),
 		"role":        role.Name,
 		"permissions": role.Permissions,
 		"exp":         time.Now().Add(24 * time.Hour).Unix(),
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 	if err != nil {
@@ -80,6 +89,11 @@ func (s *authService) Login(ctx context.Context, email, password string) (*entit
 		return nil, "", errors.New("internal error")
 	}
 
-	s.logger.Info("User logged in", zap.String("user_id", user.ID.Hex()))
+	s.logger.Info("User logged in successfully",
+		zap.String("user_id", user.ID.Hex()),
+		zap.String("email", email),
+		zap.String("role", role.Name),
+	)
+
 	return user.ToDTO(), signedToken, nil
 }

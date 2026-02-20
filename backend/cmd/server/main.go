@@ -46,27 +46,32 @@ func main() {
 	db := mongo.GetDatabase()
 	logger.Info("Connected to database", zap.String("name", db.Name()))
 
-	// Create indexes
+	// Create all required indexes
 	if err := mongo.CreateIndexes(logger); err != nil {
 		logger.Fatal("Failed to create indexes", zap.Error(err))
 	}
 
-	// 4. Repositories
+	// 4. Repositories (all core ones)
 	userRepo := mongo.NewUserRepository()
 	roleRepo := mongo.NewRoleRepository()
+	// Add more repos here later (e.g. tableRepo, menuRepo, orderRepo...)
 
 	// 5. Services
 	authService := services.NewAuthService(userRepo, roleRepo, logger)
+	userService := services.NewUserService(userRepo, roleRepo, logger)
+	roleService := services.NewRoleService(roleRepo, userRepo, logger) // note: userRepo injected for delete checks
 
 	// 6. Handlers
 	authHandler := deliveryHttp.NewAuthHandler(authService, logger)
+	userHandler := deliveryHttp.NewUserHandler(userService, logger)
+	roleHandler := deliveryHttp.NewRoleHandler(roleService, logger)
 
-	// 7. Gin router
-	gin.SetMode(gin.ReleaseMode) // change to gin.DebugMode during dev if needed
+	// 7. Gin router setup
+	gin.SetMode(gin.ReleaseMode) // change to gin.DebugMode during development
 
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(middleware.Logger(logger)) // request logging
+	r.Use(middleware.Logger(logger)) // request logging middleware
 
 	// Public health check
 	r.GET("/health", func(c *gin.Context) {
@@ -77,16 +82,37 @@ func main() {
 		})
 	})
 
-	// API routes
+	// API v1 group
 	api := r.Group("/api/v1")
 
-	// Public auth
+	// ── Public routes ────────────────────────────────────────────────────────
 	api.POST("/auth/login", authHandler.Login)
 
-	// Protected routes (example)
+	// ── Protected routes (JWT required) ──────────────────────────────────────
 	protected := api.Group("/")
 	protected.Use(middleware.JWTAuth(logger))
 
+	// Users management (admin only)
+	users := protected.Group("/users")
+	users.Use(middleware.RequirePermission("USER_MANAGE", logger)) // or finer-grained perms
+	users.POST("", userHandler.Create)
+	users.GET("", userHandler.List)
+	users.GET("/:id", userHandler.Get)
+	users.PATCH("/:id", userHandler.Update)
+	users.DELETE("/:id", userHandler.Delete)
+	users.PATCH("/:id/password", userHandler.ChangePassword) // admin reset
+	users.PATCH("/me/password", userHandler.ChangePassword)  // self change
+
+	// Roles management (admin only)
+	roles := protected.Group("/roles")
+	roles.Use(middleware.RequirePermission("ROLE_MANAGE", logger))
+	roles.POST("", roleHandler.Create)
+	roles.GET("", roleHandler.List)
+	roles.GET("/:id", roleHandler.Get)
+	roles.PATCH("/:id", roleHandler.Update)
+	roles.DELETE("/:id", roleHandler.Delete)
+
+	// Placeholder for future modules (expand later)
 	protected.GET("/orders", middleware.RequirePermission("ORDER_VIEW", logger), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Orders endpoint – implementation coming soon",
@@ -107,7 +133,7 @@ func main() {
 		}
 	}()
 
-	// Wait for shutdown signal
+	// Wait for interrupt signal (Ctrl+C or SIGTERM)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
