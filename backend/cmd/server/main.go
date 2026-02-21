@@ -55,6 +55,14 @@ func main() {
 	userRepo := mongo.NewUserRepository()
 	roleRepo := mongo.NewRoleRepository()
 	tableRepo := mongo.NewTableRepository()
+	menuCategoryRepo := mongo.NewMenuCategoryRepository()
+	menuItemRepo := mongo.NewMenuItemRepository()
+	orderRepo := mongo.NewOrderRepository()
+	billRepo := mongo.NewBillRepository()
+	paymentRepo := mongo.NewPaymentRepository()
+	inventoryRepo := mongo.NewInventoryRepository()
+	recipeRepo := mongo.NewRecipeRepository()
+	reportRepo := mongo.NewReportRepository()
 
 	// 5. Services
 	authService := services.NewAuthService(userRepo, roleRepo, logger)
@@ -62,11 +70,30 @@ func main() {
 	roleService := services.NewRoleService(roleRepo, userRepo, logger)
 	tableService := services.NewTableService(tableRepo, logger)
 
+	// Menu Category – fixed: added missing menuItemRepo dependency
+	menuCategoryService := services.NewMenuCategoryService(menuCategoryRepo, menuItemRepo, logger)
+	menuItemService := services.NewMenuItemService(menuItemRepo, menuCategoryRepo, logger)
+
+	billService := services.NewBillService(billRepo, orderRepo, logger)
+	orderService := services.NewOrderService(orderRepo, tableRepo, menuItemRepo, billService, logger)
+	paymentService := services.NewPaymentService(paymentRepo, orderRepo, tableRepo, menuItemRepo, logger)
+	inventoryService := services.NewInventoryService(inventoryRepo, recipeRepo, logger)
+	recipeService := services.NewRecipeService(recipeRepo, menuItemRepo, logger)
+	reportService := services.NewReportService(reportRepo, logger)
+
 	// 6. Handlers
 	authHandler := deliveryHttp.NewAuthHandler(authService, logger)
 	userHandler := deliveryHttp.NewUserHandler(userService, logger)
 	roleHandler := deliveryHttp.NewRoleHandler(roleService, logger)
 	tableHandler := deliveryHttp.NewTableHandler(tableService, logger)
+	menuCategoryHandler := deliveryHttp.NewMenuCategoryHandler(menuCategoryService, logger)
+	menuItemHandler := deliveryHttp.NewMenuItemHandler(menuItemService, logger)
+	orderHandler := deliveryHttp.NewOrderHandler(orderService, logger)
+	billHandler := deliveryHttp.NewBillHandler(billService, logger)
+	paymentHandler := deliveryHttp.NewPaymentHandler(paymentService, logger)
+	inventoryHandler := deliveryHttp.NewInventoryHandler(inventoryService, logger)
+	recipeHandler := deliveryHttp.NewRecipeHandler(recipeService, logger)
+	reportHandler := deliveryHttp.NewReportHandler(reportService, logger)
 
 	// 7. Gin router setup
 	gin.SetMode(gin.ReleaseMode) // change to gin.DebugMode during development
@@ -128,15 +155,7 @@ func main() {
 	waiterTables.Use(middleware.RequirePermission("TABLE_READ_ASSIGNED", logger))
 	waiterTables.GET("", tableHandler.ListAssigned)
 
-	// Menu Items
-	menuItemRepo := mongo.NewMenuItemRepository()
-
 	// Menu Categories
-	menuCategoryRepo := mongo.NewMenuCategoryRepository()
-	menuCategoryService := services.NewMenuCategoryService(menuCategoryRepo, menuItemRepo, logger) // menuItemRepo for delete check
-	menuCategoryHandler := deliveryHttp.NewMenuCategoryHandler(menuCategoryService, logger)
-
-	// Routes
 	menuCategories := protected.Group("/menu/categories")
 	menuCategories.Use(middleware.RequirePermission("MENU_CATEGORY_MANAGE", logger))
 	menuCategories.POST("", menuCategoryHandler.Create)
@@ -146,10 +165,6 @@ func main() {
 	menuCategories.DELETE("/:id", menuCategoryHandler.Delete)
 
 	// Menu Items
-	menuItemService := services.NewMenuItemService(menuItemRepo, menuCategoryRepo, logger)
-	menuItemHandler := deliveryHttp.NewMenuItemHandler(menuItemService, logger)
-
-	// Routes
 	menuItems := protected.Group("/menu/items")
 	menuItems.Use(middleware.RequirePermission("MENU_ITEM_MANAGE", logger))
 	menuItems.POST("", menuItemHandler.Create)
@@ -159,33 +174,34 @@ func main() {
 	menuItems.DELETE("/:id", menuItemHandler.Delete)
 
 	// Orders
-	orderRepo := mongo.NewOrderRepository()
-
-	// Bills
-	billRepo := mongo.NewBillRepository()
-	billService := services.NewBillService(billRepo, orderRepo, logger)
-	billHandler := deliveryHttp.NewBillHandler(billService, logger)
-	orderService := services.NewOrderService(orderRepo, tableRepo, menuItemRepo, billService, logger)
-	orderHandler := deliveryHttp.NewOrderHandler(orderService, logger)
-
-	// Routes
 	orders := protected.Group("/orders")
-	orders.Use(middleware.RequirePermission("ORDER_CREATE", logger)) // waiter
+	orders.Use(middleware.RequirePermission("ORDER_CREATE", logger))
 	orders.POST("", orderHandler.Create)
 
+	// Order by ID (add/remove items, etc.)
 	orderByID := orders.Group("/:id")
 	orderByID.Use(middleware.RequirePermission("ORDER_UPDATE_OWN", logger))
 	orderByID.PATCH("/items", orderHandler.AddItem)
+	// ... add more order routes as needed (status update, cancel, etc.)
+
+	// Bills
+	bills := protected.Group("/bills")
+	bills.Use(middleware.RequirePermission("BILL_GENERATE", logger))
+	bills.POST("", billHandler.GenerateBill)
+	bills.GET("/order/:order_id", billHandler.GetBill)
+
+	// Payments
+	payments := protected.Group("/payments")
+	payments.Use(middleware.RequirePermission("PAYMENT_PROCESS", logger))
+	payments.POST("", paymentHandler.ProcessPayment)
+	payments.GET("/order/:order_id", paymentHandler.GetPayments)
+
+	// Refunds
+	refunds := protected.Group("/refunds")
+	refunds.Use(middleware.RequirePermission("REFUND_PROCESS", logger))
+	refunds.POST("/order/:order_id", paymentHandler.ProcessRefund)
 
 	// Inventory
-	inventoryRepo := mongo.NewInventoryRepository()
-	recipeRepo := mongo.NewRecipeRepository()
-	inventoryService := services.NewInventoryService(inventoryRepo, recipeRepo, logger)
-	inventoryHandler := deliveryHttp.NewInventoryHandler(inventoryService, logger)
-	recipeService := services.NewRecipeService(recipeRepo, menuItemRepo, logger)
-	recipeHandler := deliveryHttp.NewRecipeHandler(recipeService, logger)
-
-	// Routes for inventory
 	inventory := protected.Group("/inventory")
 	inventory.Use(middleware.RequirePermission("INVENTORY_MANAGE", logger))
 	inventory.POST("", inventoryHandler.Create)
@@ -195,7 +211,7 @@ func main() {
 	inventory.DELETE("/:id", inventoryHandler.Delete)
 	inventory.GET("/report", inventoryHandler.GetReport)
 
-	// Routes for recipes (per menu item)
+	// Recipes
 	recipes := protected.Group("/recipes")
 	recipes.Use(middleware.RequirePermission("MENU_ITEM_MANAGE", logger))
 	recipes.POST("", recipeHandler.Create)
@@ -203,27 +219,14 @@ func main() {
 	recipes.PATCH("/:menu_item_id", recipeHandler.Update)
 	recipes.DELETE("/:menu_item_id", recipeHandler.Delete)
 
-	// Payments
-	paymentRepo := mongo.NewPaymentRepository()
-	paymentService := services.NewPaymentService(paymentRepo, orderRepo, tableRepo, menuItemRepo, logger)
-	paymentHandler := deliveryHttp.NewPaymentHandler(paymentService, logger)
-
-	// Routes - Cashier only
-	payments := protected.Group("/payments")
-	payments.Use(middleware.RequirePermission("PAYMENT_PROCESS_FULL", logger))
-	payments.POST("", paymentHandler.ProcessPayment)
-	payments.GET("/order/:order_id", paymentHandler.GetPayments)
-
-	// Refund (cashier/manager)
-	refunds := protected.Group("/refunds")
-	refunds.Use(middleware.RequirePermission("REFUND_PROCESS", logger))
-	refunds.POST("/order/:order_id", paymentHandler.ProcessRefund)
-
-	// Routes - Cashier/Manager only
-	bills := protected.Group("/bills")
-	bills.Use(middleware.RequirePermission("BILL_GENERATE", logger))
-	bills.POST("", billHandler.GenerateBill)
-	bills.GET("/order/:order_id", billHandler.GetBill)
+	// Reporting
+	reports := protected.Group("/reports")
+	reports.Use(middleware.RequirePermission("REPORT_VIEW", logger))
+	reports.GET("/sales", reportHandler.GetSalesSummary)
+	reports.GET("/top-items", reportHandler.GetTopItems)
+	reports.GET("/inventory-status", reportHandler.GetInventoryStatus)
+	reports.GET("/payment-breakdown", reportHandler.GetPaymentBreakdown)
+	reports.GET("/refund-summary", reportHandler.GetRefundSummary)
 
 	// 8. Graceful shutdown
 	srv := &http.Server{
