@@ -71,8 +71,35 @@ func CreateIndexes(logger *zap.Logger) error {
 		logger.Error("Failed to create tables indexes", zap.Error(err))
 		return err
 	}
+	// Inventory
+	inventoryColl := db.Collection("inventory")
+	_, err = inventoryColl.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "name", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+	if err != nil {
+		logger.Error("Failed to create inventory name unique index", zap.Error(err))
+	}
+
+	_, err = inventoryColl.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "quantity", Value: 1}},
+	})
+	if err != nil {
+		logger.Error("Failed to create inventory quantity index", zap.Error(err))
+	}
+
+	// Recipes (unique on menu_item_id)
+	recipesColl := db.Collection("recipes")
+	_, err = recipesColl.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "menu_item_id", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+	if err != nil {
+		logger.Error("Failed to create recipes menu_item_id unique index", zap.Error(err))
+	}
 
 	logger.Info("All MongoDB indexes created successfully",
 		zap.Strings("collections_indexed", []string{"users", "roles", "tables"}))
 	return nil
+
 }

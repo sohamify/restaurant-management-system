@@ -128,12 +128,75 @@ func main() {
 	waiterTables.Use(middleware.RequirePermission("TABLE_READ_ASSIGNED", logger))
 	waiterTables.GET("", tableHandler.ListAssigned)
 
-	// Placeholder for orders (next feature)
-	protected.GET("/orders", middleware.RequirePermission("ORDER_VIEW", logger), func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Orders endpoint – coming soon",
-		})
-	})
+	// Menu Items
+	menuItemRepo := mongo.NewMenuItemRepository()
+
+	// Menu Categories
+	menuCategoryRepo := mongo.NewMenuCategoryRepository()
+	menuCategoryService := services.NewMenuCategoryService(menuCategoryRepo, menuItemRepo, logger) // menuItemRepo for delete check
+	menuCategoryHandler := deliveryHttp.NewMenuCategoryHandler(menuCategoryService, logger)
+
+	// Routes
+	menuCategories := protected.Group("/menu/categories")
+	menuCategories.Use(middleware.RequirePermission("MENU_CATEGORY_MANAGE", logger))
+	menuCategories.POST("", menuCategoryHandler.Create)
+	menuCategories.GET("", menuCategoryHandler.List)
+	menuCategories.GET("/:id", menuCategoryHandler.Get)
+	menuCategories.PATCH("/:id", menuCategoryHandler.Update)
+	menuCategories.DELETE("/:id", menuCategoryHandler.Delete)
+
+	// Menu Items
+	menuItemService := services.NewMenuItemService(menuItemRepo, menuCategoryRepo, logger)
+	menuItemHandler := deliveryHttp.NewMenuItemHandler(menuItemService, logger)
+
+	// Routes
+	menuItems := protected.Group("/menu/items")
+	menuItems.Use(middleware.RequirePermission("MENU_ITEM_MANAGE", logger))
+	menuItems.POST("", menuItemHandler.Create)
+	menuItems.GET("", menuItemHandler.List)
+	menuItems.GET("/:id", menuItemHandler.Get)
+	menuItems.PATCH("/:id", menuItemHandler.Update)
+	menuItems.DELETE("/:id", menuItemHandler.Delete)
+
+	// Orders
+	orderRepo := mongo.NewOrderRepository()
+	orderService := services.NewOrderService(orderRepo, tableRepo, menuItemRepo, logger)
+	orderHandler := deliveryHttp.NewOrderHandler(orderService, logger)
+
+	// Routes
+	orders := protected.Group("/orders")
+	orders.Use(middleware.RequirePermission("ORDER_CREATE", logger)) // waiter
+	orders.POST("", orderHandler.Create)
+
+	orderByID := orders.Group("/:id")
+	orderByID.Use(middleware.RequirePermission("ORDER_UPDATE_OWN", logger))
+	orderByID.PATCH("/items", orderHandler.AddItem)
+
+	// Inventory
+	inventoryRepo := mongo.NewInventoryRepository()
+	recipeRepo := mongo.NewRecipeRepository()
+	inventoryService := services.NewInventoryService(inventoryRepo, recipeRepo, logger)
+	inventoryHandler := deliveryHttp.NewInventoryHandler(inventoryService, logger)
+	recipeService := services.NewRecipeService(recipeRepo, menuItemRepo, logger)
+	recipeHandler := deliveryHttp.NewRecipeHandler(recipeService, logger)
+
+	// Routes for inventory
+	inventory := protected.Group("/inventory")
+	inventory.Use(middleware.RequirePermission("INVENTORY_MANAGE", logger))
+	inventory.POST("", inventoryHandler.Create)
+	inventory.GET("", inventoryHandler.List)
+	inventory.GET("/:id", inventoryHandler.Get)
+	inventory.PATCH("/:id", inventoryHandler.Update)
+	inventory.DELETE("/:id", inventoryHandler.Delete)
+	inventory.GET("/report", inventoryHandler.GetReport)
+
+	// Routes for recipes (per menu item)
+	recipes := protected.Group("/recipes")
+	recipes.Use(middleware.RequirePermission("MENU_ITEM_MANAGE", logger))
+	recipes.POST("", recipeHandler.Create)
+	recipes.GET("/:menu_item_id", recipeHandler.Get)
+	recipes.PATCH("/:menu_item_id", recipeHandler.Update)
+	recipes.DELETE("/:menu_item_id", recipeHandler.Delete)
 
 	// 8. Graceful shutdown
 	srv := &http.Server{
