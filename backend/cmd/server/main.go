@@ -198,6 +198,22 @@ func main() {
 	recipes.PATCH("/:menu_item_id", recipeHandler.Update)
 	recipes.DELETE("/:menu_item_id", recipeHandler.Delete)
 
+	// Payments
+	paymentRepo := mongo.NewPaymentRepository()
+	paymentService := services.NewPaymentService(paymentRepo, orderRepo, tableRepo, menuItemRepo, logger)
+	paymentHandler := deliveryHttp.NewPaymentHandler(paymentService, logger)
+
+	// Routes - Cashier only
+	payments := protected.Group("/payments")
+	payments.Use(middleware.RequirePermission("PAYMENT_PROCESS_FULL", logger))
+	payments.POST("", paymentHandler.ProcessPayment)
+	payments.GET("/order/:order_id", paymentHandler.GetPayments)
+
+	// Refund (cashier/manager)
+	refunds := protected.Group("/refunds")
+	refunds.Use(middleware.RequirePermission("REFUND_PROCESS", logger))
+	refunds.POST("/order/:order_id", paymentHandler.ProcessRefund)
+
 	// 8. Graceful shutdown
 	srv := &http.Server{
 		Addr:    ":" + getPort(),

@@ -98,6 +98,15 @@ func CreateIndexes(logger *zap.Logger) error {
 		logger.Error("Failed to create recipes menu_item_id unique index", zap.Error(err))
 	}
 
+	// Payments
+	paymentsColl := db.Collection("payments")
+	_, err = paymentsColl.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "order_id", Value: 1}},
+	})
+	if err != nil {
+		logger.Error("Failed to create payments order_id index", zap.Error(err))
+	}
+
 	logger.Info("All MongoDB indexes created successfully",
 		zap.Strings("collections_indexed", []string{"users", "roles", "tables"}))
 	return nil
