@@ -160,7 +160,12 @@ func main() {
 
 	// Orders
 	orderRepo := mongo.NewOrderRepository()
-	orderService := services.NewOrderService(orderRepo, tableRepo, menuItemRepo, logger)
+
+	// Bills
+	billRepo := mongo.NewBillRepository()
+	billService := services.NewBillService(billRepo, orderRepo, logger)
+	billHandler := deliveryHttp.NewBillHandler(billService, logger)
+	orderService := services.NewOrderService(orderRepo, tableRepo, menuItemRepo, billService, logger)
 	orderHandler := deliveryHttp.NewOrderHandler(orderService, logger)
 
 	// Routes
@@ -213,6 +218,12 @@ func main() {
 	refunds := protected.Group("/refunds")
 	refunds.Use(middleware.RequirePermission("REFUND_PROCESS", logger))
 	refunds.POST("/order/:order_id", paymentHandler.ProcessRefund)
+
+	// Routes - Cashier/Manager only
+	bills := protected.Group("/bills")
+	bills.Use(middleware.RequirePermission("BILL_GENERATE", logger))
+	bills.POST("", billHandler.GenerateBill)
+	bills.GET("/order/:order_id", billHandler.GetBill)
 
 	// 8. Graceful shutdown
 	srv := &http.Server{

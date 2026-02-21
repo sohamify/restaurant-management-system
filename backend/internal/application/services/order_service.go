@@ -39,6 +39,7 @@ type orderService struct {
 	orderRepo    repositories.OrderRepository
 	tableRepo    repositories.TableRepository
 	menuItemRepo repositories.MenuItemRepository
+	billService  BillService
 	logger       *zap.Logger
 }
 
@@ -46,9 +47,10 @@ func NewOrderService(
 	orderRepo repositories.OrderRepository,
 	tableRepo repositories.TableRepository,
 	menuItemRepo repositories.MenuItemRepository,
+	billService BillService,
 	logger *zap.Logger,
 ) OrderService {
-	return &orderService{orderRepo, tableRepo, menuItemRepo, logger}
+	return &orderService{orderRepo, tableRepo, menuItemRepo, billService, logger}
 }
 
 func (s *orderService) CreateOrder(ctx context.Context, req *entities.CreateOrderRequest, waiterID string) (*entities.OrderDTO, error) {
@@ -237,8 +239,22 @@ func (s *orderService) UpdateOrderStatus(ctx context.Context, orderID string, st
 		return nil, err
 	}
 
+	if status == entities.OrderCompleted {
+		// Generate bill automatically
+		billReq := &entities.GenerateBillRequest{
+			OrderID:       orderID,
+			TaxRate:       5.0, // from config or order metadata
+			ServiceCharge: 0.0,
+			Discount:      0.0,
+		}
+		if _, err := s.billService.GenerateBill(ctx, billReq); err != nil {
+			s.logger.Error("Failed to auto-generate bill", zap.Error(err))
+		}
+	}
+
 	updatedOrder, _ := s.orderRepo.FindByID(ctx, oid)
 	return updatedOrder.ToDTO(), nil
+
 }
 
 func (s *orderService) CancelOrder(ctx context.Context, orderID string, reason string) error {
