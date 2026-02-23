@@ -1,0 +1,1672 @@
+openapi: 3.0.3
+info:
+  title: Restaurant Management System (RMS) API
+  description: |-
+    This is the API documentation for the Restaurant Management System (RMS) backend. 
+    It provides endpoints for authentication, user and role management, table management, menu handling, order processing, billing, payments, refunds, inventory, recipes, and reporting/analytics.
+    
+    All protected endpoints require JWT authentication in the Authorization header: `Bearer <token>`.
+    
+    Permissions are enforced based on user roles (e.g., Admin, Manager, Waiter, Chef, Cashier).
+    
+    Base URL: http://localhost:8080/api/v1
+  version: 1.0.0
+  contact:
+    name: Soham
+    email: soham@rms.com
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role_id:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        phone:
+          type: string
+        role_id:
+          type: string
+    UpdateUserRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone:
+          type: string
+        is_active:
+          type: boolean
+    ChangePasswordRequest:
+      type: object
+      properties:
+        old_password:
+          type: string
+        new_password:
+          type: string
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    UpdateRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    Table:
+      type: object
+      properties:
+        id:
+          type: string
+        table_number:
+          type: integer
+        capacity:
+          type: integer
+        status:
+          type: string
+          enum: [AVAILABLE, OCCUPIED]
+        assigned_waiter_id:
+          type: string
+        current_order_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateTableRequest:
+      type: object
+      properties:
+        table_number:
+          type: integer
+        capacity:
+          type: integer
+    UpdateTableRequest:
+      type: object
+      properties:
+        status:
+          type: string
+        assigned_waiter_id:
+          type: string
+        current_order_id:
+          type: string
+    MenuCategory:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateMenuCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    UpdateMenuCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    MenuItem:
+      type: object
+      properties:
+        id:
+          type: string
+        category_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        is_available:
+          type: boolean
+        inventory_qty:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateMenuItemRequest:
+      type: object
+      properties:
+        category_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        inventory_qty:
+          type: integer
+    UpdateMenuItemRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        is_available:
+          type: boolean
+        inventory_qty:
+          type: integer
+    OrderItem:
+      type: object
+      properties:
+        menu_item_id:
+          type: string
+        quantity:
+          type: integer
+        price_at_time:
+          type: number
+        notes:
+          type: string
+        status:
+          type: string
+    CreateOrderRequest:
+      type: object
+      properties:
+        table_id:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AddItemToOrderRequest'
+        notes:
+          type: string
+    AddItemToOrderRequest:
+      type: object
+      properties:
+        menu_item_id:
+          type: string
+        quantity:
+          type: integer
+        notes:
+          type: string
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        table_id:
+          type: string
+        waiter_id:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        total_amount:
+          type: number
+        status:
+          type: string
+          enum: [PLACED, PREPARING, READY, COMPLETED, PAID, CANCELLED]
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Bill:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        table_id:
+          type: string
+        waiter_id:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillItem'
+        subtotal:
+          type: number
+        tax_rate:
+          type: number
+        tax_amount:
+          type: number
+        service_charge:
+          type: number
+        discount_amount:
+          type: number
+        grand_total:
+          type: number
+        status:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        paid_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    BillItem:
+      type: object
+      properties:
+        menu_item_id:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+        price_per_unit:
+          type: number
+        total:
+          type: number
+    GenerateBillRequest:
+      type: object
+      properties:
+        order_id:
+          type: string
+        tax_rate:
+          type: number
+        service_charge:
+          type: number
+        discount:
+          type: number
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        amount:
+          type: number
+        method:
+          type: string
+          enum: [CASH, UPI, CARD, WALLET]
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, REFUNDED, FAILED]
+        paid_at:
+          type: string
+          format: date-time
+        refunded_at:
+          type: string
+          format: date-time
+        refund_notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ProcessPaymentRequest:
+      type: object
+      properties:
+        order_id:
+          type: string
+        amount:
+          type: number
+        method:
+          type: string
+        notes:
+          type: string
+    RefundRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+        reason:
+          type: string
+    InventoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        unit:
+          type: string
+        quantity:
+          type: number
+        low_stock_threshold:
+          type: number
+        supplier_info:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateInventoryItemRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        unit:
+          type: string
+        quantity:
+          type: number
+        low_stock_threshold:
+          type: number
+        supplier_info:
+          type: string
+    UpdateInventoryItemRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        unit:
+          type: string
+        quantity:
+          type: number
+        low_stock_threshold:
+          type: number
+        supplier_info:
+          type: string
+    InventoryReport:
+      type: object
+      properties:
+        low_stock_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryItem'
+        total_items:
+          type: integer
+    RecipeIngredient:
+      type: object
+      properties:
+        inventory_item_id:
+          type: string
+        quantity_per_unit:
+          type: number
+    Recipe:
+      type: object
+      properties:
+        menu_item_id:
+          type: string
+        ingredients:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeIngredient'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateRecipeRequest:
+      type: object
+      properties:
+        menu_item_id:
+          type: string
+        ingredients:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeIngredient'
+    UpdateRecipeRequest:
+      type: object
+      properties:
+        ingredients:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeIngredient'
+    ReportFilter:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        period:
+          type: string
+          enum: [daily, weekly, monthly]
+    SalesSummary:
+      type: object
+      properties:
+        period:
+          type: string
+        total_revenue:
+          type: number
+        order_count:
+          type: integer
+        avg_order_value:
+          type: number
+        completed_orders:
+          type: integer
+        cancelled_orders:
+          type: integer
+        cancellation_rate:
+          type: number
+    TopItem:
+      type: object
+      properties:
+        menu_item_id:
+          type: string
+        name:
+          type: string
+        quantity_sold:
+          type: integer
+        revenue:
+          type: number
+    InventoryStatusItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        unit:
+          type: string
+        current_quantity:
+          type: number
+        low_stock_threshold:
+          type: number
+        is_low_stock:
+          type: boolean
+    PaymentMethodBreakdown:
+      type: object
+      properties:
+        method:
+          type: string
+        count:
+          type: integer
+        total_amount:
+          type: number
+    RefundSummary:
+      type: object
+      properties:
+        total_refunded:
+          type: number
+        refund_count:
+          type: integer
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Checks if the server is running and connected to the database.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  db:
+                    type: string
+                  version:
+                    type: string
+  /api/v1/auth/login:
+    post:
+      summary: Login
+      description: Authenticates a user and returns a JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/users:
+    post:
+      summary: Create User
+      description: Creates a new user (admin only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List Users
+      description: Lists users with pagination (admin only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+  /api/v1/users/{id}:
+    get:
+      summary: Get User
+      description: Gets a user by ID (admin only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      summary: Update User
+      description: Updates a user (admin only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    delete:
+      summary: Delete User
+      description: Deletes a user (admin only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No content
+  /api/v1/users/{id}/password:
+    patch:
+      summary: Change Password (admin reset)
+      description: Changes a user's password (admin only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_password:
+                  type: string
+      responses:
+        '200':
+          description: Password changed
+  /api/v1/users/me/password:
+    patch:
+      summary: Change Password (self)
+      description: Changes own password.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed
+  /api/v1/roles:
+    post:
+      summary: Create Role
+      description: Creates a new role (admin only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+    get:
+      summary: List Roles
+      description: Lists roles with pagination (admin only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+  /api/v1/roles/{id}:
+    get:
+      summary: Get Role
+      description: Gets a role by ID (admin only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+    patch:
+      summary: Update Role
+      description: Updates a role (admin only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+      responses:
+        '200':
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+    delete:
+      summary: Delete Role
+      description: Deletes a role (admin only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No content
+  /api/v1/tables:
+    post:
+      summary: Create Table
+      description: Creates a new table (admin/manager only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTableRequest'
+      responses:
+        '201':
+          description: Table created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+    get:
+      summary: List Tables
+      description: Lists tables with pagination and filter by status (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of tables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Table'
+  /api/v1/tables/{id}:
+    get:
+      summary: Get Table
+      description: Gets a table by ID (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Table details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+    patch:
+      summary: Update Table
+      description: Updates a table (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTableRequest'
+      responses:
+        '200':
+          description: Updated table
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+    delete:
+      summary: Delete Table
+      description: Deletes a table (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No content
+  /api/v1/waiter/tables:
+    get:
+      summary: List Assigned Tables
+      description: Lists tables assigned to the current waiter.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of assigned tables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Table'
+  /api/v1/menu/categories:
+    post:
+      summary: Create Menu Category
+      description: Creates a new menu category (admin/manager only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMenuCategoryRequest'
+      responses:
+        '201':
+          description: Menu category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuCategory'
+    get:
+      summary: List Menu Categories
+      description: Lists menu categories with pagination (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of menu categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MenuCategory'
+  /api/v1/menu/categories/{id}:
+    get:
+      summary: Get Menu Category
+      description: Gets a menu category by ID (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Menu category details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuCategory'
+    patch:
+      summary: Update Menu Category
+      description: Updates a menu category (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMenuCategoryRequest'
+      responses:
+        '200':
+          description: Updated menu category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuCategory'
+    delete:
+      summary: Delete Menu Category
+      description: Deletes a menu category (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No content
+  /api/v1/menu/items:
+    post:
+      summary: Create Menu Item
+      description: Creates a new menu item (admin/manager only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMenuItemRequest'
+      responses:
+        '201':
+          description: Menu item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItem'
+    get:
+      summary: List Menu Items
+      description: Lists menu items with pagination and filter by category/availability.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: category_id
+          in: query
+          schema:
+            type: string
+        - name: is_available
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of menu items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MenuItem'
+  /api/v1/menu/items/{id}:
+    get:
+      summary: Get Menu Item
+      description: Gets a menu item by ID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Menu item details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItem'
+    patch:
+      summary: Update Menu Item
+      description: Updates a menu item (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMenuItemRequest'
+      responses:
+        '200':
+          description: Updated menu item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItem'
+    delete:
+      summary: Delete Menu Item
+      description: Deletes a menu item (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No content
+  /api/v1/orders:
+    post:
+      summary: Create Order
+      description: Creates a new order (waiter only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+  /api/v1/orders/{id}/items:
+    patch:
+      summary: Add Item to Order
+      description: Adds an item to an order (waiter only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddItemToOrderRequest'
+      responses:
+        '200':
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+  /api/v1/bills:
+    post:
+      summary: Generate Bill
+      description: Generates a bill for an order (cashier/manager only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateBillRequest'
+      responses:
+        '201':
+          description: Bill generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+  /api/v1/bills/order/{order_id}:
+    get:
+      summary: Get Bill for Order
+      description: Gets the bill for an order.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bill details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+  /api/v1/payments:
+    post:
+      summary: Process Payment
+      description: Processes a payment for an order (cashier only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessPaymentRequest'
+      responses:
+        '201':
+          description: Payment processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+  /api/v1/payments/order/{order_id}:
+    get:
+      summary: Get Payments for Order
+      description: Gets payments for an order.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+  /api/v1/refunds/order/{order_id}:
+    post:
+      summary: Process Refund
+      description: Processes a refund for an order (cashier/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      responses:
+        '204':
+          description: No content
+  /api/v1/inventory:
+    post:
+      summary: Create Inventory Item
+      description: Creates a new inventory item (admin/manager only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInventoryItemRequest'
+      responses:
+        '201':
+          description: Inventory item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+    get:
+      summary: List Inventory Items
+      description: Lists inventory items with pagination and search.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of inventory items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryItem'
+  /api/v1/inventory/{id}:
+    get:
+      summary: Get Inventory Item
+      description: Gets an inventory item by ID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Inventory item details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+    patch:
+      summary: Update Inventory Item
+      description: Updates an inventory item (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInventoryItemRequest'
+      responses:
+        '200':
+          description: Updated inventory item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+    delete:
+      summary: Delete Inventory Item
+      description: Deletes an inventory item (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No content
+  /api/v1/inventory/report:
+    get:
+      summary: Get Inventory Report
+      description: Gets low stock items and total items count.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Inventory report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryReport'
+  /api/v1/recipes:
+    post:
+      summary: Create Recipe
+      description: Creates a recipe for a menu item (admin/manager only).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRecipeRequest'
+      responses:
+        '201':
+          description: Recipe created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recipe'
+  /api/v1/recipes/{menu_item_id}:
+    get:
+      summary: Get Recipe
+      description: Gets a recipe for a menu item.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: menu_item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recipe details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recipe'
+    patch:
+      summary: Update Recipe
+      description: Updates a recipe for a menu item (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: menu_item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRecipeRequest'
+      responses:
+        '200':
+          description: Updated recipe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recipe'
+    delete:
+      summary: Delete Recipe
+      description: Deletes a recipe for a menu item (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: menu_item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No content
+  /api/v1/reports/sales:
+    get:
+      summary: Get Sales Summary
+      description: Gets sales summary with advanced metrics (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+      responses:
+        '200':
+          description: Sales summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesSummary'
+  /api/v1/reports/top-items:
+    get:
+      summary: Get Top Selling Items
+      description: Gets top selling items by revenue (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of top items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TopItem'
+  /api/v1/reports/inventory-status:
+    get:
+      summary: Get Inventory Status
+      description: Gets current inventory status with low stock alerts.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Inventory status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryStatusItem'
+  /api/v1/reports/payment-breakdown:
+    get:
+      summary: Get Payment Method Breakdown
+      description: Gets payment method distribution (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Payment breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentMethodBreakdown'
+  /api/v1/reports/refund-summary:
+    get:
+      summary: Get Refund Summary
+      description: Gets refund summary with rate (admin/manager only).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Refund summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundSummary'
+security:
+  - bearerAuth: [] 
